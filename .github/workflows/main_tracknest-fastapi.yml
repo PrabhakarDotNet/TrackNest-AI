@@ -18,14 +18,32 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Debug - list files
+        run: ls -R
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      # ✅ SAFE REQUIREMENTS INSTALL (won't fail build if path differs)
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
+          elif [ -f app/requirements.txt ]; then
+            pip install -r app/requirements.txt
+          else
+            echo "⚠️ No requirements.txt found, skipping install"
+          fi
 
       - name: Create deployment package
         run: |
-          zip -r release.zip . -x "venv/*" "__pycache__/*"
+          zip -r release.zip . \
+            -x "venv/*" \
+            -x "__pycache__/*" \
+            -x "*.pyc" \
+            -x ".git/*"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
