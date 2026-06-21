@@ -6,7 +6,7 @@ on:
       - main
   workflow_dispatch:
 
-permissions:          # ← ADD THIS — required for OIDC azure/login@v2
+permissions:
   id-token: write
   contents: read
 
@@ -21,9 +21,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Debug - list files
-        run: ls -R
-
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
@@ -33,11 +30,18 @@ jobs:
             pip install -r requirements.txt
           elif [ -f backend/requirements.txt ]; then
             pip install -r backend/requirements.txt
-          elif [ -f app/requirements.txt ]; then
-            pip install -r app/requirements.txt
           else
-            echo "⚠️ No requirements.txt found, skipping install"
+            echo "⚠️ No requirements.txt found"
           fi
+
+      - name: Verify requirements.txt exists at root    # ← new: catch early
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "❌ requirements.txt not found at repo root!"
+            exit 1
+          fi
+          echo "✅ requirements.txt found"
+          cat requirements.txt
 
       - name: Create deployment package
         run: |
@@ -45,7 +49,8 @@ jobs:
             -x "venv/*" \
             -x "__pycache__/*" \
             -x "*.pyc" \
-            -x ".git/*"
+            -x ".git/*" \
+            -x ".github/*"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -68,7 +73,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8F79F3FB8BFC45089C5AB78920AF53F1 }}     
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8F79F3FB8BFC45089C5AB78920AF53F1 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_015CB5B61FCD4226BF4A633E9A4B1780 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_ABABCB930CB949B0A57D5D59F643A1A9 }}
 
