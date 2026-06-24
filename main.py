@@ -90,7 +90,7 @@ Reply with ONLY the category name, nothing else.
     return CategoryResponse(category=category)
 
 
-# ── New chat endpoint ──────────────────────────────────
+# ── Chat endpoint ──────────────────────────────────────
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     history = get_session_history(request.session_id)
@@ -100,13 +100,18 @@ async def chat(request: ChatRequest):
     if request.expenses:
         expense_context = "User's current expenses:\n"
         for e in request.expenses:
-            expense_context += f"- {e.get('description','N/A')}: ₹{e.get('amount',0)} ({e.get('category','N/A')})\n"
+            expense_context += f"- {e.get('description','N/A')}: ₹{e.get('amount',0)} ({e.get('category','N/A')}) on {e.get('expenseDate','N/A')}\n"
 
     # Build messages for LangChain
     messages = [
-        ("system", f"""You are TrackNest AI, a helpful personal expense tracking assistant.
-Help users understand their spending habits and answer questions about expenses.
-Be concise, friendly and helpful.
+        ("system", f"""You are TrackNest AI, a personal expense tracking assistant built into the TrackNest app.
+
+STRICT RULES:
+- You ONLY answer questions related to the user's expenses, spending habits, budgeting, and personal finance.
+- If the user asks anything unrelated to expenses or finance (coding, general knowledge, jokes, etc.), politely decline and redirect them to ask about their expenses.
+- Never write code, essays, stories, or answer general knowledge questions.
+- Always respond in a concise, friendly, and helpful tone.
+
 {expense_context}"""),
     ]
 
