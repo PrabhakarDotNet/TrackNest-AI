@@ -5,6 +5,8 @@ from groq import Groq
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
+from datetime import date
+import json
 import os
 
 load_dotenv()
@@ -58,6 +60,14 @@ class ChatResponse(BaseModel):
     reply: str
     session_id: str
 
+class ExtractedExpense(BaseModel):        # ✅ moved here with other models
+    found: bool
+    description: str = ""
+    amount: float = 0
+    category: str = ""
+    expenseDate: str = ""
+    confidence: str = ""
+
 # ── Categories ────────────────────────────────────────
 CATEGORIES = [
     "Food & Dining", "Transport", "Shopping", "Health",
@@ -92,12 +102,11 @@ Reply with ONLY the category name, nothing else.
 async def chat(request: ChatRequest):
     history = get_session_history(request.session_id)
 
-    # Build expense context
     if request.expenses:
         expense_lines = "\n".join(
-            f"- {e.get('description','N/A')}: ₹{e.get('amount', 0)} "
-            f"({e.get('category','N/A')}) on {e.get('expenseDate','N/A')}"
-            for e in request.expenses
+                    f"- {e.get('description','N/A')}: ₹{e.get('amount', 0)} "
+                    f"({e.get('category','N/A')}) on {e.get('expenseDate','N/A')[:10]}"  # ✅ [:10] strips T00:00:00
+                    for e in request.expenses
         )
         expense_context = f"User's actual expenses ({len(request.expenses)} records):\n{expense_lines}"
     else:
@@ -131,6 +140,59 @@ STRICT RULES:
     history.append({"role": "assistant", "content": reply})
 
     return ChatResponse(reply=reply, session_id=request.session_id)
+
+# ── Extract Expense ───────────────────────────────────
+@app.post("/extract-expense", response_model=ExtractedExpense)
+async def extract_expense(request: DescriptionRequest):
+    today = date.today().isoformat()
+
+    prompt = f"""
+You are an expense extraction assistant.
+Today's date is {today}.
+
+Analyze the user message and extract expense details if present.
+Return ONLY a JSON object, nothing else, no markdown, no explanation.
+
+Categories to choose from:
+Food & Dining, Transport, Shopping, Health, Bills & Utilities,
+Entertainment, Sports & Fitness, Education, Investment, Other
+
+If the message contains an expense, return:
+{{
+  "found": true,
+  "description": "short description",
+  "amount": 500,
+  "category": "Food & Dining",
+  "expenseDate": "{today}",
+  "confidence": "high"
+}}
+
+If no expense found, return:
+{{
+  "found": false,
+  "description": "",
+  "amount": 0,
+  "category": "",
+  "expenseDate": "",
+  "confidence": "low"
+}}
+
+User message: "{request.description}"
+"""
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=150,
+        temperature=0
+    )
+
+    raw = response.choices[0].message.content.strip()
+
+    try:
+        data = json.loads(raw)
+        return ExtractedExpense(**data)
+    except Exception:
+        return ExtractedExpense(found=False)
 
 # ── Clear Session ─────────────────────────────────────
 @app.delete("/chat/{session_id}")
