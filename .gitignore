@@ -8,3 +8,4 @@ ENV/
 .vscode/
 .idea/
 chroma_db/
+check_chroma.py
